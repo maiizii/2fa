@@ -535,7 +535,7 @@ export async function createSetupPage() {
 
         const data = await response.json();
 
-        if (response.ok) {
+        if (response.status === 200 && data.success === true && !data.queued && !data.offline) {
           showSuccess(data.message || '密码设置成功！正在跳转...');
 
           // 2秒后跳转到主页
@@ -543,7 +543,9 @@ export async function createSetupPage() {
             window.location.href = '/';
           }, 2000);
         } else {
-          showError(data.message || '设置失败，请重试');
+          showError(data.queued || data.offline || response.status === 202
+            ? '网络连接失败，请检查连接后重新设置'
+            : data.message || '设置失败，请重试');
           submitButton.disabled = false;
           submitButton.textContent = '完成设置';
         }

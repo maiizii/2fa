@@ -38,6 +38,7 @@ const DB_NAME = '2fa-offline-db';
 const DB_VERSION = 1;
 const SW_VERSION = '${version}';
 const STORE_NAME = 'pending-operations';
+const AUTH_API_PATHS = ['/api/login', '/api/setup', '/api/refresh-token'];
 
 // 版本信息（用于调试）
 console.log('[SW] Service Worker 版本:', SW_VERSION);
@@ -325,9 +326,9 @@ self.addEventListener('fetch', event => {
       fetch(request).catch(async err => {
         console.error('[SW] API 请求失败:', url.pathname, err);
 
-        // 只有修改数据的请求才保存到离线队列（POST、PUT、DELETE）
+        // 认证必须在线完成，不能保存密码或返回离线排队成功。
         const method = request.method.toUpperCase();
-        if (method === 'POST' || method === 'PUT' || method === 'DELETE') {
+        if (!AUTH_API_PATHS.includes(url.pathname) && (method === 'POST' || method === 'PUT' || method === 'DELETE')) {
           try {
             // 读取请求体
             const requestClone = request.clone();
@@ -407,10 +408,12 @@ self.addEventListener('fetch', event => {
           }
         }
 
-        // GET 请求失败时返回标准错误（不保存到队列）
+        // 认证及其他不入队请求失败时，明确返回网络错误。
         return new Response(
           JSON.stringify({
+            success: false,
             error: '网络连接失败',
+            message: '网络连接失败，请检查连接后重试',
             detail: '无法连接到服务器，请检查网络连接',
             offline: true
           }),
@@ -620,6 +623,12 @@ async function syncPendingOperations() {
 
     for (const operation of operations) {
       try {
+        // 删除旧版本误存的认证请求，避免恢复网络后自动重放密码。
+        if (AUTH_API_PATHS.includes(operation.url)) {
+          await deleteOperation(operation.id);
+          continue;
+        }
+
         console.log('[SW] 正在同步操作:', operation.id, operation.type);
 
         // 构建请求

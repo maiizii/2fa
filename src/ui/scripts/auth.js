@@ -51,9 +51,9 @@ export function getAuthCode() {
           credentials: 'include' // 🍪 自动携带 Cookie
         });
 
-        if (response.ok) {
+        if (response.status === 200) {
           const data = await response.json();
-          if (data.success) {
+          if (data.success === true && !data.queued && !data.offline) {
             console.log('✅ Token 刷新成功');
             return true;
           }
@@ -142,7 +142,7 @@ export function getAuthCode() {
 
         const data = await response.json();
 
-        if (response.ok && data.success) {
+        if (response.status === 200 && data.success === true && !data.queued && !data.offline) {
           // 登录成功 - token 已通过 HttpOnly Cookie 自动设置
           hideLoginModal();
 
@@ -157,7 +157,9 @@ export function getAuthCode() {
           loadSecrets();
         } else {
           // 登录失败
-          errorDiv.textContent = data.message || '密码错误，请重试';
+          errorDiv.textContent = data.queued || data.offline || response.status === 202
+            ? '网络连接失败，请检查连接后重新登录'
+            : data.message || '登录失败，请重试';
           errorDiv.style.display = 'block';
           tokenInput.value = '';
           tokenInput.focus();
